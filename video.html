@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>My Introduction — Shared Video</title>
+
+<!--
+  Smart App Banner: shows the "Open" bar at the top of Safari on iOS,
+  prompting the visitor to get/open your app. Replace YOUR_NUMERIC_APP_ID
+  below with the numeric Apple ID found in App Store Connect →
+  App Information → "Apple ID" field.
+  The app-argument lets the app receive this exact URL if it's opened,
+  which you can use later for real Universal Links deep-linking; for now
+  it's harmless to leave in even without that set up.
+-->
+<meta name="apple-itunes-app" content="app-id=YOUR_NUMERIC_APP_ID" />
+
+<style>
+  :root {
+    color-scheme: light;
+    --blue: #3B82F6;
+    --lavender: #9B8AFB;
+    --bg: #F7F7FB;
+    --card: #FFFFFF;
+    --text: #1C1C1E;
+    --muted: #6B6B75;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 60px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 28px 22px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+  }
+  h1 {
+    font-size: 22px;
+    margin: 0 0 6px;
+    text-align: center;
+  }
+  p.subtitle {
+    color: var(--muted);
+    text-align: center;
+    font-size: 14px;
+    margin: 0 0 24px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  input[type="text"] {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #E2E2E8;
+    font-size: 16px;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  button {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 14px;
+    background: var(--blue);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .error {
+    color: #D92D20;
+    font-size: 13px;
+    margin-top: 10px;
+    text-align: center;
+    display: none;
+  }
+  .result { display: none; margin-top: 20px; }
+  video {
+    width: 100%;
+    border-radius: 14px;
+    background: black;
+    margin-bottom: 14px;
+  }
+  .owner {
+    font-weight: 600;
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+  .caption {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+  .app-note {
+    background: #F0F0FA;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 18px;
+  }
+  .spinner {
+    display: none;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div id="formView">
+      <h1>👀 Shared Video</h1>
+      <p class="subtitle">Enter the access code you were given to view this video.</p>
+      <label for="codeInput">Access code</label>
+      <input type="text" id="codeInput" placeholder="e.g. AB12CD" maxlength="8" />
+      <button id="viewButton">View video</button>
+      <div class="spinner" id="spinner">Loading…</div>
+      <div class="error" id="errorBox"></div>
+    </div>
+
+    <div class="result" id="resultView">
+      <video id="videoPlayer" controls playsinline></video>
+      <div class="owner" id="ownerName"></div>
+      <div class="caption" id="captionText"></div>
+      <div class="app-note">
+        Want to see this person's full profile, react, or connect as a friend?
+        Get the app — tap the banner above, or find it on the App Store.
+      </div>
+    </div>
+  </div>
+
+  <!-- CloudKit's public JavaScript SDK -->
+  <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
+  <script>
+    // ── Fill these in with your own values ──────────────────────────────
+    const CONTAINER_ID = "iCloud.com.aanyagupta.mindmatchprototype2";
+    const API_TOKEN = "939a15d8935759ab016b4696c2b9ce65a0b237f141de1aa26745d924f4152752";
+    // Use "development" while testing, switch to "production" once you've
+    // deployed your schema to Production in CloudKit Dashboard and shipped
+    // the app.
+    const ENVIRONMENT = "development";
+    // ──────────────────────────────────────────────────────────────────
+
+    CloudKit.configure({
+      containers: [{
+        containerIdentifier: CONTAINER_ID,
+        apiTokenAuth: { apiToken: API_TOKEN, persist: false },
+        environment: ENVIRONMENT
+      }]
+    });
+
+    const container = CloudKit.getDefaultContainer();
+    const publicDB = container.publicCloudDatabase;
+
+    function getPostIDFromURL() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("id");
+    }
+
+    const postID = getPostIDFromURL();
+    const formView = document.getElementById("formView");
+    const resultView = document.getElementById("resultView");
+    const codeInput = document.getElementById("codeInput");
+    const viewButton = document.getElementById("viewButton");
+    const spinner = document.getElementById("spinner");
+    const errorBox = document.getElementById("errorBox");
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.style.display = "block";
+    }
+    function clearError() {
+      errorBox.style.display = "none";
+      errorBox.textContent = "";
+    }
+
+    if (!postID) {
+      showError("This link is missing a video ID. Ask for the full link again.");
+      viewButton.disabled = true;
+    }
+
+    viewButton.addEventListener("click", () => {
+      const code = codeInput.value.trim();
+      if (!code) {
+        showError("Enter the access code first.");
+        return;
+      }
+      clearError();
+      spinner.style.display = "block";
+      viewButton.disabled = true;
+
+      const query = {
+        recordType: "SharedPost",
+        filterBy: [{
+          fieldName: "postID",
+          comparator: "EQUALS",
+          fieldValue: { value: postID }
+        }]
+      };
+
+      publicDB.performQuery(query).then((response) => {
+        spinner.style.display = "none";
+        viewButton.disabled = false;
+
+        if (!response.hasErrors && response.records.length > 0) {
+          const record = response.records[0];
+          const storedCode = (record.fields.accessCode &&
+            record.fields.accessCode.value) || "";
+
+          if (storedCode.toUpperCase() !== code.toUpperCase()) {
+            showError("That access code doesn't match this video.");
+            return;
+          }
+
+          const asset = record.fields.videoAsset && record.fields.videoAsset.value;
+          if (!asset || !asset.downloadURL) {
+            showError("This video's file couldn't be found.");
+            return;
+          }
+
+          document.getElementById("videoPlayer").src = asset.downloadURL;
+          document.getElementById("ownerName").textContent =
+            "From @" + ((record.fields.ownerUsername && record.fields.ownerUsername.value) || "someone");
+          document.getElementById("captionText").textContent =
+            (record.fields.caption && record.fields.caption.value) || "";
+
+          formView.style.display = "none";
+          resultView.style.display = "block";
+        } else {
+          showError("We couldn't find a video with that link and code.");
+        }
+      }).catch((err) => {
+        spinner.style.display = "none";
+        viewButton.disabled = false;
+        showError("Something went wrong. Please try again.");
+        console.error(err);
+      });
+    });
+  </script>
+</body>
+</html>
