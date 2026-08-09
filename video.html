@@ -219,8 +219,21 @@
       publicDB.performQuery(query).then((response) => {
         spinner.style.display = "none";
         viewButton.disabled = false;
+        console.log("CloudKit query response:", response);
 
-        if (!response.hasErrors && response.records.length > 0) {
+        if (response.hasErrors) {
+          // Surface the actual server-side reason (e.g. a permissions
+          // problem shows up here as something like "not authorized" —
+          // very different from "no record found", and much easier to
+          // diagnose with the real message visible).
+          const detail = (response.errors && response.errors[0] &&
+            response.errors[0].reason) || "Unknown error";
+          showError("CloudKit error: " + detail);
+          console.error("CloudKit query errors:", response.errors);
+          return;
+        }
+
+        if (response.records.length > 0) {
           const record = response.records[0];
           const storedCode = (record.fields.accessCode &&
             record.fields.accessCode.value) || "";
@@ -232,11 +245,22 @@
 
           const asset = record.fields.videoAsset && record.fields.videoAsset.value;
           if (!asset || !asset.downloadURL) {
-            showError("This video's file couldn't be found.");
+            showError("This video's file couldn't be found on the record.");
+            console.error("Record found but no videoAsset:", record);
             return;
           }
 
-          document.getElementById("videoPlayer").src = asset.downloadURL;
+          const player = document.getElementById("videoPlayer");
+          // If the browser can't actually load/play the asset URL (a
+          // permissions issue, an expired/invalid signed URL, or a
+          // network problem), the <video> tag fails silently by default —
+          // this makes that failure visible instead of a black box.
+          player.addEventListener("error", () => {
+            showError("The video file couldn't be loaded. This usually means public read access isn't enabled for SharedPost in CloudKit Dashboard → Security Roles.");
+            console.error("Video element error:", player.error, "asset:", asset);
+          }, { once: true });
+          player.src = asset.downloadURL;
+
           document.getElementById("ownerName").textContent =
             "From @" + ((record.fields.ownerUsername && record.fields.ownerUsername.value) || "someone");
           document.getElementById("captionText").textContent =
@@ -245,12 +269,12 @@
           formView.style.display = "none";
           resultView.style.display = "block";
         } else {
-          showError("We couldn't find a video with that link and code.");
+          showError("We couldn't find a video with that link and code. (No matching record — double check the link, or that a \"Queryable\" index exists on postID in CloudKit Dashboard.)");
         }
       }).catch((err) => {
         spinner.style.display = "none";
         viewButton.disabled = false;
-        showError("Something went wrong. Please try again.");
+        showError("Something went wrong: " + (err && err.message ? err.message : String(err)));
         console.error(err);
       });
     });
