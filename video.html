@@ -193,12 +193,13 @@
     }
 
     if (!postID) {
-      showError("This link is missing a video ID. Ask for the full link again.");
-      viewButton.disabled = true;
+      // No link at all is fine now — someone can just type in an access
+      // code, no different from the app's "Enter an access code" option.
+      // Only the code field is required going forward.
     }
 
     viewButton.addEventListener("click", () => {
-      const code = codeInput.value.trim();
+      const code = codeInput.value.trim().toUpperCase();
       if (!code) {
         showError("Enter the access code first.");
         return;
@@ -207,14 +208,26 @@
       spinner.style.display = "block";
       viewButton.disabled = true;
 
-      const query = {
-        recordType: "SharedPost",
-        filterBy: [{
-          fieldName: "postID",
-          comparator: "EQUALS",
-          fieldValue: { value: postID }
-        }]
-      };
+      // With a postID (came from a real link), match on both for
+      // precision. Without one, the access code alone is specific enough
+      // to find the right video — same as the app's code-only entry.
+      const query = postID
+        ? {
+            recordType: "SharedPost",
+            filterBy: [{
+              fieldName: "postID",
+              comparator: "EQUALS",
+              fieldValue: { value: postID }
+            }]
+          }
+        : {
+            recordType: "SharedPost",
+            filterBy: [{
+              fieldName: "accessCode",
+              comparator: "EQUALS",
+              fieldValue: { value: code }
+            }]
+          };
 
       publicDB.performQuery(query).then((response) => {
         spinner.style.display = "none";
