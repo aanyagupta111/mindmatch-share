@@ -193,9 +193,13 @@
     }
 
     if (!postID) {
-      // No link at all is fine now — someone can just type in an access
-      // code, no different from the app's "Enter an access code" option.
-      // Only the code field is required going forward.
+      // By design, this web page is only ever reached via a real link
+      // (which always includes ?id=...). Entering just a code with no
+      // link at all is an app-only capability (Friends tab → "Enter an
+      // access code", or the login screen's "View a shared video") —
+      // not something this lightweight web page needs to support.
+      showError("This link is missing a video ID. Ask for the full link again.");
+      viewButton.disabled = true;
     }
 
     viewButton.addEventListener("click", () => {
@@ -208,26 +212,14 @@
       spinner.style.display = "block";
       viewButton.disabled = true;
 
-      // With a postID (came from a real link), match on both for
-      // precision. Without one, the access code alone is specific enough
-      // to find the right video — same as the app's code-only entry.
-      const query = postID
-        ? {
-            recordType: "SharedPost",
-            filterBy: [{
-              fieldName: "postID",
-              comparator: "EQUALS",
-              fieldValue: { value: postID }
-            }]
-          }
-        : {
-            recordType: "SharedPost",
-            filterBy: [{
-              fieldName: "accessCode",
-              comparator: "EQUALS",
-              fieldValue: { value: code }
-            }]
-          };
+      const query = {
+        recordType: "SharedPost",
+        filterBy: [{
+          fieldName: "postID",
+          comparator: "EQUALS",
+          fieldValue: { value: postID }
+        }]
+      };
 
       publicDB.performQuery(query).then((response) => {
         spinner.style.display = "none";
