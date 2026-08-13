@@ -9,7 +9,7 @@
      additive — has no effect on anyone just visiting the page in a
      normal browser tab. -->
 <link rel="manifest" href="manifest.json" />
-<meta name="theme-color" content="#4A78E8" />
+<meta name="theme-color" content="#5B9BD5" />
 <link rel="icon" href="icon-192.png" />
 <!-- iOS-specific home-screen behavior (Android reads manifest.json directly) -->
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -20,13 +20,16 @@
 <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
 <style>
   :root {
-    --bg: #F6F5FA;
+    /* Exact colors pulled from the iOS app's Color extension (appBackground,
+       appText, appCardBackground, appBlue, appLavender) — not
+       approximations, the same RGB values converted to hex. */
+    --bg: #FAFAF8;
     --card: #FFFFFF;
-    --text: #22203A;
-    --muted: #6E6B8A;
-    --blue: #4A78E8;
-    --lavender: #9C86E0;
-    --border: #E6E3F2;
+    --text: #2C2C2E;
+    --muted: #6E6E73;
+    --blue: #5B9BD5;
+    --lavender: #9B8EC4;
+    --border: #E5E5E7;
     --danger: #E0563F;
     --radius: 18px;
   }
@@ -204,7 +207,7 @@
 <div class="tabs hidden" id="mainTabs">
   <div class="tab active" data-panel="record-panel">Record</div>
   <div class="tab" data-panel="redeem-panel">Have a code?</div>
-  <div class="tab" data-panel="myposts-panel">My Posts</div>
+  <div class="tab" data-panel="myposts-panel">My Introductions</div>
   <div class="tab" data-panel="friends-panel">Friends</div>
   <div class="tab" data-panel="profile-panel">My Profile</div>
 </div>
@@ -282,10 +285,11 @@
 <!-- REDEEM -->
 <div class="panel" id="redeem-panel">
   <div class="card">
-    <label>Access code</label>
+    <label style="margin-top:0;">Have an access code?</label>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">Already signed in? You don't need the link — just enter the code someone gave you.</p>
     <input type="text" id="redeemCode" placeholder="E.G. AB12CD" autocapitalize="characters" />
     <div class="btn-row">
-      <button class="btn-primary" id="redeemBtn">View</button>
+      <button class="btn-lavender" id="redeemBtn">🔑 View video</button>
     </div>
     <div class="status" id="redeemStatus"></div>
   </div>
@@ -314,7 +318,7 @@
 <!-- EDIT POST MODAL -->
 <div class="panel" id="editpost-panel">
   <div class="card">
-    <button class="btn-secondary" id="backFromEditBtn" style="width:auto;padding:6px 14px;margin-bottom:14px;">&larr; Back to My Posts</button>
+    <button class="btn-secondary" id="backFromEditBtn" style="width:auto;padding:6px 14px;margin-bottom:14px;">&larr; Back to My Introductions</button>
     <div class="video-wrap" id="editPostMediaWrap"></div>
     <label>Caption</label>
     <textarea id="editCaption"></textarea>
@@ -412,7 +416,16 @@
   CloudKit.configure({
     containers: [{
       containerIdentifier: CONTAINER_ID,
-      apiTokenAuth: { apiToken: API_TOKEN, persist: true },
+      apiTokenAuth: {
+        apiToken: API_TOKEN,
+        persist: true,
+        // CloudKit JS renders its own official "Sign in with Apple"
+        // button directly into the element with this id — this is the
+        // documented, correct pattern (a raw container.signIn() call
+        // isn't part of the actual public API, which is why the earlier
+        // custom button did nothing when clicked).
+        signInButton: { id: 'appleSignInButton', theme: 'black' }
+      },
       environment: ENVIRONMENT
     }]
   });
@@ -432,32 +445,30 @@
   }
 
   container.setUpAuth().then(userInfo => {
+    console.log('[MindMatch] setUpAuth resolved:', userInfo);
     if (userInfo) {
       handleSignedIn(userInfo);
     } else {
-      gotoUnauthenticatedState();
+      // No custom button needed — CloudKit JS already rendered its own
+      // official "Sign in with Apple" button into #appleSignInButton
+      // (declared in the signInButton config above). We just wait for
+      // that button to actually be clicked and used.
+      const statusEl = document.getElementById('signInStatus');
+      statusEl.textContent = '';
+      container.whenUserSignsIn().then(userInfo => {
+        console.log('[MindMatch] whenUserSignsIn resolved:', userInfo);
+        handleSignedIn(userInfo);
+      }).catch(err => {
+        console.error('[MindMatch] whenUserSignsIn rejected:', err);
+        statusEl.textContent = 'Sign-in failed: ' + (err.message || JSON.stringify(err));
+        statusEl.className = 'status error';
+      });
     }
   }).catch(err => {
+    console.error('[MindMatch] setUpAuth rejected:', err);
     document.getElementById('signInStatus').textContent = 'Sign-in unavailable right now: ' + (err.message || err);
     document.getElementById('signInStatus').className = 'status error';
   });
-
-  function gotoUnauthenticatedState() {
-    const btnWrap = document.getElementById('appleSignInButton');
-    btnWrap.innerHTML = '';
-    const btn = document.createElement('button');
-    btn.textContent = '🍎  Sign in with Apple';
-    btn.className = 'btn-primary';
-    btn.style.width = '100%';
-    btn.addEventListener('click', () => {
-      container.whenUserSignsIn().then(handleSignedIn).catch(err => {
-        document.getElementById('signInStatus').textContent = 'Sign-in failed: ' + (err.message || err);
-        document.getElementById('signInStatus').className = 'status error';
-      });
-      container.signIn();
-    });
-    btnWrap.appendChild(btn);
-  }
 
   function handleSignedIn(userInfo) {
     currentUserRecordName = userInfo.userRecordName;
@@ -902,7 +913,7 @@
     document.getElementById('redeemResultCard').classList.remove('hidden');
   }
 
-  // ---------- My Posts (management: all own posts, public + private) ----------
+  // ---------- My Introductions (management: all own posts, public + private) ----------
   let myAllPosts = [];
   let editingRecord = null;
 
