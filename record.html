@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>MindMatch — Record &amp; Share</title>
+
+<!-- PWA: makes this installable to a phone's home screen. Purely
+     additive — has no effect on anyone just visiting the page in a
+     normal browser tab. -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#4A78E8" />
+<link rel="icon" href="icon-192.png" />
+<!-- iOS-specific home-screen behavior (Android reads manifest.json directly) -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="MindMatch" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+
+<script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
+<style>
+  :root {
+    --bg: #F6F5FA;
+    --card: #FFFFFF;
+    --text: #22203A;
+    --muted: #6E6B8A;
+    --blue: #4A78E8;
+    --lavender: #9C86E0;
+    --border: #E6E3F2;
+    --danger: #E0563F;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 40px;
+  }
+  header {
+    padding: 22px 20px 14px;
+    text-align: center;
+  }
+  header h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+    font-weight: 700;
+  }
+  header p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    padding: 0 20px 18px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px 0;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    background: var(--card);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .tab.active {
+    background: var(--blue);
+    color: white;
+    border-color: var(--blue);
+  }
+  .panel { display: none; padding: 0 20px; max-width: 480px; margin: 0 auto; }
+  .panel.active { display: block; }
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(30,20,60,0.06);
+  }
+  video {
+    width: 100%;
+    border-radius: 14px;
+    background: #000;
+    display: block;
+    max-height: 60vh;
+  }
+  .video-wrap { position: relative; }
+  .caption-overlay {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 14px;
+    text-align: center;
+    color: white;
+    font-weight: 700;
+    font-size: 15px;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.8);
+    pointer-events: none;
+  }
+  .btn-row { display: flex; gap: 10px; margin-top: 14px; }
+  button {
+    font-family: inherit;
+    border: none;
+    border-radius: 14px;
+    padding: 13px 16px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    flex: 1;
+  }
+  .btn-primary { background: var(--blue); color: white; }
+  .btn-primary:disabled { background: #B9C6EE; cursor: not-allowed; }
+  .btn-secondary { background: var(--border); color: var(--text); }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-lavender { background: var(--lavender); color: white; }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 6px; }
+  input[type=text], textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    background: #FAFAFE;
+    color: var(--text);
+  }
+  textarea { min-height: 70px; resize: vertical; }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: #FAFAFE;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-top: 14px;
+  }
+  .toggle-row span { font-size: 14px; font-weight: 600; }
+  .toggle-row small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--blue); }
+  .status { font-size: 13px; margin-top: 10px; text-align: center; }
+  .status.error { color: var(--danger); }
+  .status.success { color: #1E8E5A; }
+  .code-box {
+    text-align: center;
+    background: #FAFAFE;
+    border: 1.5px dashed var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    margin-top: 14px;
+  }
+  .code-box .code { font-size: 30px; font-weight: 800; letter-spacing: 4px; color: var(--text); margin: 6px 0; }
+  .code-box .link { font-size: 12px; color: var(--blue); word-break: break-all; }
+  .copy-btn { margin-top: 10px; }
+  .rec-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--danger);
+    display: inline-block; margin-right: 6px; animation: pulse 1s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .timer { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .note {
+    font-size: 12px;
+    color: var(--muted);
+    background: #FAFAFE;
+    border-radius: 12px;
+    padding: 12px 14px;
+    line-height: 1.5;
+    margin-top: 14px;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MindMatch — Web</h1>
+  <p>Record, save, and share an intro from any browser.</p>
+</header>
+
+<!-- SIGN IN GATE -->
+<div class="panel active" id="signin-gate" style="max-width:480px;margin:0 auto;padding:0 20px;">
+  <div class="card" style="text-align:center;">
+    <p style="font-size:14px;color:var(--muted);margin-top:0;">
+      Sign in with the same Apple ID you use for iCloud — this is the same account system as the iOS app, so your videos, friends, and profile stay in sync either way.
+    </p>
+    <div id="appleSignInButton" style="display:flex;justify-content:center;margin:14px 0;"></div>
+    <div class="status" id="signInStatus"></div>
+  </div>
+</div>
+
+<div id="signedInBar" class="hidden" style="max-width:480px;margin:0 auto;padding:0 20px 6px;text-align:right;">
+  <span style="font-size:12px;color:var(--muted);">Signed in <span id="signedInAs"></span> · <a href="#" id="signOutLink" style="color:var(--blue);">Sign out</a></span>
+</div>
+
+<div class="tabs hidden" id="mainTabs">
+  <div class="tab active" data-panel="record-panel">Record</div>
+  <div class="tab" data-panel="redeem-panel">Have a code?</div>
+  <div class="tab" data-panel="myposts-panel">My Posts</div>
+  <div class="tab" data-panel="friends-panel">Friends</div>
+  <div class="tab" data-panel="profile-panel">My Profile</div>
+</div>
+
+<!-- RECORD -->
+<div class="panel" id="record-panel">
+  <div class="card">
+    <div class="video-wrap">
+      <video id="preview" autoplay muted playsinline></video>
+      <div class="caption-overlay hidden" id="livePreviewCaption"></div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="startBtn">Start camera</button>
+    </div>
+    <div class="btn-row hidden" id="recordControls">
+      <button class="btn-danger" id="recordBtn"><span class="rec-dot"></span>Record</button>
+      <button class="btn-secondary hidden" id="stopBtn">Stop <span class="timer" id="timer">0:00</span></button>
+    </div>
+    <div class="status" id="cameraStatus"></div>
+  </div>
+
+  <div class="card hidden" id="reviewCard">
+    <label>Preview your recording</label>
+    <div class="video-wrap">
+      <video id="playback" controls playsinline></video>
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" id="retakeBtn">Retake</button>
+      <button class="btn-primary" id="useRecordingBtn">Use this recording</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="detailsCard">
+    <label>Caption / message</label>
+    <textarea id="captionInput" placeholder="Say a little about this video..."></textarea>
+
+    <label>Tag</label>
+    <input type="text" id="tagInput" placeholder="e.g. Happy, Chill, or your own" list="recordTagSuggestions" />
+    <datalist id="recordTagSuggestions">
+      <option value="Happy"></option>
+      <option value="Sad"></option>
+      <option value="Mellow"></option>
+      <option value="Chill"></option>
+    </datalist>
+
+    <div class="toggle-row">
+      <span>Post publicly to my profile
+        <small>Anyone with your access code can view it either way.</small>
+      </span>
+      <input type="checkbox" id="publicToggle" checked />
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary" id="saveBtn">Save &amp; get link</button>
+    </div>
+    <div class="status" id="saveStatus"></div>
+
+    <div class="code-box hidden" id="resultBox">
+      <div>Access code</div>
+      <div class="code" id="resultCode">——————</div>
+      <div class="link" id="resultLink"></div>
+      <div class="btn-row copy-btn">
+        <button class="btn-secondary" id="copyLinkBtn">Copy link</button>
+        <button class="btn-secondary" id="copyCodeBtn">Copy code</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    Works in Chrome, Firefox, and Safari on both phones and computers. Camera and microphone access is requested by your browser, not this page directly — nothing is uploaded until you tap "Save &amp; get link."
+  </div>
+</div>
+
+<!-- REDEEM -->
+<div class="panel" id="redeem-panel">
+  <div class="card">
+    <label>Access code</label>
+    <input type="text" id="redeemCode" placeholder="E.G. AB12CD" autocapitalize="characters" />
+    <div class="btn-row">
+      <button class="btn-primary" id="redeemBtn">View</button>
+    </div>
+    <div class="status" id="redeemStatus"></div>
+  </div>
+
+  <div class="card hidden" id="redeemResultCard">
+    <div class="video-wrap">
+      <video id="redeemVideo" controls playsinline class="hidden"></video>
+      <img id="redeemImage" class="hidden" style="width:100%;border-radius:14px;" />
+    </div>
+    <div id="redeemCaption" style="margin-top:12px;font-size:15px;"></div>
+    <div id="redeemOwner" style="margin-top:6px;font-size:13px;color:var(--muted);"></div>
+  </div>
+</div>
+
+<!-- MY POSTS (management: all posts, public + private, edit/delete/tag) -->
+<div class="panel" id="myposts-panel">
+  <div class="card">
+    <label style="margin-top:0;">Filter by tag</label>
+    <select id="tagFilter" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);font-size:14px;font-family:inherit;">
+      <option value="">All tags</option>
+    </select>
+  </div>
+  <div id="myPostsList"><div class="card"><span class="status">Loading...</span></div></div>
+</div>
+
+<!-- EDIT POST MODAL -->
+<div class="panel" id="editpost-panel">
+  <div class="card">
+    <button class="btn-secondary" id="backFromEditBtn" style="width:auto;padding:6px 14px;margin-bottom:14px;">&larr; Back to My Posts</button>
+    <div class="video-wrap" id="editPostMediaWrap"></div>
+    <label>Caption</label>
+    <textarea id="editCaption"></textarea>
+    <label>Tag</label>
+    <input type="text" id="editTag" placeholder="e.g. Happy, Chill, or your own" list="tagSuggestions" />
+    <datalist id="tagSuggestions">
+      <option value="Happy"></option>
+      <option value="Sad"></option>
+      <option value="Mellow"></option>
+      <option value="Chill"></option>
+    </datalist>
+    <div class="toggle-row">
+      <span>Post publicly to my profile</span>
+      <input type="checkbox" id="editPublicToggle" />
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" id="saveEditBtn">Save changes</button>
+    </div>
+    <div class="btn-row">
+      <button class="btn-danger" id="deletePostBtn">Delete this post</button>
+    </div>
+    <div class="status" id="editStatus"></div>
+  </div>
+</div>
+
+<!-- FRIENDS -->
+<div class="panel" id="friends-panel">
+  <div class="card" id="friendsSignedOutNotice">
+    <p style="margin:0;font-size:14px;color:var(--muted);">Sign in with Apple (top of page) to use Friends and Discover.</p>
+  </div>
+  <div id="friendsSignedInContent" class="hidden">
+    <div class="card">
+      <label>Discover people</label>
+      <input type="text" id="discoverSearch" placeholder="Search by username" />
+      <div class="btn-row"><button class="btn-secondary" id="discoverSearchBtn">Search</button></div>
+      <div id="discoverResults" style="margin-top:10px;"></div>
+      <div class="status" id="discoverStatus"></div>
+    </div>
+    <div class="card">
+      <label style="margin-top:0;">Friend requests</label>
+      <div id="incomingRequests"><span class="status">No pending requests.</span></div>
+    </div>
+    <div class="card">
+      <label style="margin-top:0;">My friends</label>
+      <div id="friendsList"><span class="status">Loading...</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- MY PROFILE -->
+<div class="panel" id="profile-panel">
+  <div class="card" id="profileSignedOutNotice">
+    <p style="margin:0;font-size:14px;color:var(--muted);">Sign in with Apple (top of page) to set up your profile.</p>
+  </div>
+  <div id="profileSignedInContent" class="hidden">
+    <div class="card" style="text-align:center;">
+      <div id="profilePhotoPreview" style="width:84px;height:84px;border-radius:50%;background:var(--border);margin:0 auto 10px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:30px;font-weight:700;color:var(--blue);"></div>
+      <input type="file" id="profilePhotoInput" accept="image/*" class="hidden" />
+      <button class="btn-secondary" id="choosePhotoBtn" style="width:auto;padding:8px 16px;">Change photo</button>
+      <label>Bio</label>
+      <textarea id="bioInput" placeholder="Say a little about yourself..."></textarea>
+      <div class="btn-row"><button class="btn-primary" id="saveProfileBtn">Save profile</button></div>
+      <div class="status" id="profileSaveStatus"></div>
+    </div>
+    <div class="card">
+      <label style="margin-top:0;">My public posts</label>
+      <div id="myPublicPosts"><span class="status">Loading...</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW SOMEONE'S PROFILE -->
+<div class="panel" id="viewprofile-panel">
+  <div class="card" style="text-align:center;">
+    <button class="btn-secondary" id="backFromProfileBtn" style="width:auto;padding:6px 14px;margin-bottom:10px;">&larr; Back</button>
+    <div id="viewProfilePhoto" style="width:72px;height:72px;border-radius:50%;background:var(--border);margin:0 auto 10px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:26px;font-weight:700;color:var(--blue);"></div>
+    <div id="viewProfileUsername" style="font-weight:700;font-size:18px;"></div>
+    <div id="viewProfileBio" style="font-size:13px;color:var(--muted);margin-top:6px;"></div>
+    <div id="viewProfileFriendAction" style="margin-top:12px;"></div>
+  </div>
+  <div class="card">
+    <label style="margin-top:0;">Public posts</label>
+    <div id="viewProfilePosts"></div>
+  </div>
+</div>
+
+<script>
+  // ── Fill these in with your own values (same as video.html) ──────
+  const CONTAINER_ID = "iCloud.com.aanyagupta.mindmatchprototype2";
+  const API_TOKEN = "391c41dfd7fbea1a0c74c07a8c1080f9c5ca26fae76d9a570b4e37fbb985c01a";
+  const ENVIRONMENT = "production";
+  const WEB_LINK_BASE = "https://aanyagupta111.github.io/mindmatch-share/record.html";
+  // ──────────────────────────────────────────────────────────────
+
+  CloudKit.configure({
+    containers: [{
+      containerIdentifier: CONTAINER_ID,
+      apiTokenAuth: { apiToken: API_TOKEN, persist: true },
+      environment: ENVIRONMENT
+    }]
+  });
+  const container = CloudKit.getDefaultContainer();
+  const publicDB = container.publicCloudDatabase;
+
+  // The real, authenticated identity once someone signs in with Apple —
+  // this is the SAME kind of identity your iOS app sees via
+  // CKContainer.fetchUserRecordID for that same Apple ID, so friends and
+  // profiles set up here are genuinely the same person as on iOS, not a
+  // separate web-only account.
+  let currentUserRecordName = null;
+  let myUsername = null;
+
+  function ensureSignedIn() {
+    return currentUserRecordName !== null;
+  }
+
+  container.setUpAuth().then(userInfo => {
+    if (userInfo) {
+      handleSignedIn(userInfo);
+    } else {
+      gotoUnauthenticatedState();
+    }
+  }).catch(err => {
+    document.getElementById('signInStatus').textContent = 'Sign-in unavailable right now: ' + (err.message || err);
+    document.getElementById('signInStatus').className = 'status error';
+  });
+
+  function gotoUnauthenticatedState() {
+    const btnWrap = document.getElementById('appleSignInButton');
+    btnWrap.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.textContent = '🍎  Sign in with Apple';
+    btn.className = 'btn-primary';
+    btn.style.width = '100%';
+    btn.addEventListener('click', () => {
+      container.whenUserSignsIn().then(handleSignedIn).catch(err => {
+        document.getElementById('signInStatus').textContent = 'Sign-in failed: ' + (err.message || err);
+        document.getElementById('signInStatus').className = 'status error';
+      });
+      container.signIn();
+    });
+    btnWrap.appendChild(btn);
+  }
+
+  function handleSignedIn(userInfo) {
+    currentUserRecordName = userInfo.userRecordName;
+    document.getElementById('signin-gate').classList.add('hidden');
+    document.getElementById('signedInBar').classList.remove('hidden');
+    document.getElementById('mainTabs').classList.remove('hidden');
+    document.getElementById('record-panel').classList.add('active');
+    document.getElementById('friendsSignedOutNotice').classList.add('hidden');
+    document.getElementById('friendsSignedInContent').classList.remove('hidden');
+    document.getElementById('profileSignedOutNotice').classList.add('hidden');
+    document.getElementById('profileSignedInContent').classList.remove('hidden');
+    // Pick a default display name from the Apple sign-in info, editable via profile later.
+    myUsername = (userInfo.firstName || 'friend').toLowerCase();
+    document.getElementById('signedInAs').textContent = '@' + myUsername;
+    ensureOwnUserProfile();
+    loadFriendsList();
+    loadIncomingRequests();
+    loadMyPublicPosts();
+    loadOwnProfile();
+  }
+
+  document.getElementById('signOutLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    location.reload();
+  });
+
+  // A persistent anonymous identity for this browser, stored locally.
+  // ---------- Tabs ----------
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.panel).classList.add('active');
+    });
+  });
+
+  // ---------- Recording ----------
+  let stream = null;
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let recordedBlob = null;
+  let recordTimerInterval = null;
+  let recordSeconds = 0;
+
+  const preview = document.getElementById('preview');
+  const playback = document.getElementById('playback');
+  const startBtn = document.getElementById('startBtn');
+  const recordControls = document.getElementById('recordControls');
+  const recordBtn = document.getElementById('recordBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const timerEl = document.getElementById('timer');
+  const cameraStatus = document.getElementById('cameraStatus');
+  const reviewCard = document.getElementById('reviewCard');
+  const detailsCard = document.getElementById('detailsCard');
+  const retakeBtn = document.getElementById('retakeBtn');
+  const useRecordingBtn = document.getElementById('useRecordingBtn');
+
+  startBtn.addEventListener('click', async () => {
+    cameraStatus.textContent = '';
+    cameraStatus.className = 'status';
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
+        audio: true
+      });
+      preview.srcObject = stream;
+      startBtn.classList.add('hidden');
+      recordControls.classList.remove('hidden');
+    } catch (err) {
+      cameraStatus.textContent = 'Could not access camera/mic: ' + err.message + '. Check your browser\'s site permissions.';
+      cameraStatus.className = 'status error';
+    }
+  });
+
+  recordBtn.addEventListener('click', () => {
+    recordedChunks = [];
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      recordedBlob = new Blob(recordedChunks, { type: mimeType });
+      const url = URL.createObjectURL(recordedBlob);
+      playback.src = url;
+      reviewCard.classList.remove('hidden');
+      reviewCard.scrollIntoView({ behavior: 'smooth' });
+    };
+    mediaRecorder.start();
+    recordSeconds = 0;
+    timerEl.textContent = '0:00';
+    recordBtn.classList.add('hidden');
+    stopBtn.classList.remove('hidden');
+    recordTimerInterval = setInterval(() => {
+      recordSeconds++;
+      const m = Math.floor(recordSeconds / 60);
+      const s = String(recordSeconds % 60).padStart(2, '0');
+      timerEl.textContent = `${m}:${s}`;
+      if (recordSeconds >= 90) stopBtn.click(); // 90s safety cap
+    }, 1000);
+  });
+
+  stopBtn.addEventListener('click', () => {
+    mediaRecorder.stop();
+    clearInterval(recordTimerInterval);
+    recordBtn.classList.remove('hidden');
+    stopBtn.classList.add('hidden');
+  });
+
+  retakeBtn.addEventListener('click', () => {
+    reviewCard.classList.add('hidden');
+    detailsCard.classList.add('hidden');
+    recordedBlob = null;
+  });
+
+  useRecordingBtn.addEventListener('click', () => {
+    detailsCard.classList.remove('hidden');
+    detailsCard.scrollIntoView({ behavior: 'smooth' });
+  });
+
+  // ---------- Save & share ----------
+  const saveBtn = document.getElementById('saveBtn');
+  const saveStatus = document.getElementById('saveStatus');
+  const resultBox = document.getElementById('resultBox');
+  const resultCode = document.getElementById('resultCode');
+  const resultLink = document.getElementById('resultLink');
+
+  function generateAccessCode() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous 0/O 1/I
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    if (!recordedBlob) return;
+    if (!ensureSignedIn()) {
+      saveStatus.textContent = 'Please sign in with Apple first.';
+      saveStatus.className = 'status error';
+      return;
+    }
+    saveBtn.disabled = true;
+    saveStatus.textContent = 'Uploading...';
+    saveStatus.className = 'status';
+    try {
+      const postID = crypto.randomUUID();
+      const accessCode = generateAccessCode();
+      const ownerRecordName = currentUserRecordName;
+      const caption = document.getElementById('captionInput').value || '';
+      const tag = document.getElementById('tagInput').value.trim() || 'Untagged';
+      const isPublic = document.getElementById('publicToggle').checked ? 1 : 0;
+
+      const record = {
+        recordType: 'SharedPost',
+        fields: {
+          postID: { value: postID },
+          accessCode: { value: accessCode },
+          ownerUsername: { value: myUsername },
+          ownerRecordName: { value: ownerRecordName },
+          caption: { value: caption },
+          autoCaption: { value: '' },
+          createdAt: { value: Date.now() },
+          postType: { value: 'video' },
+          isPublic: { value: isPublic },
+          tag: { value: tag }
+        }
+      };
+
+      // Video asset upload requires a two-step process in CloudKit JS:
+      // request an upload URL, PUT the file there, then reference it.
+      const uploadResponse = await container.publicCloudDatabase.client.request({
+        method: 'POST',
+        path: `${container.containerPath}/assets/upload`,
+        data: { tokens: [{ recordType: 'SharedPost', fieldName: 'videoAsset' }] }
+      });
+      const uploadInfo = uploadResponse.data.tokens[0];
+      const uploadResult = await fetch(uploadInfo.url, {
+        method: 'POST',
+        body: recordedBlob
+      }).then(r => r.json());
+      const uploadedAsset = uploadResult.singleFile;
+
+      record.fields.videoAsset = {
+        value: {
+          downloadURL: uploadedAsset.downloadURL,
+          receipt: uploadedAsset.receipt,
+          size: uploadedAsset.size
+        }
+      };
+
+      await publicDB.saveRecords([record]);
+
+      const link = `${WEB_LINK_BASE}?redeem=1&id=${postID}`;
+      resultCode.textContent = accessCode;
+      resultLink.textContent = link;
+      resultBox.classList.remove('hidden');
+      saveStatus.textContent = 'Saved! Share the link and code below.';
+      saveStatus.className = 'status success';
+      saveBtn.classList.add('hidden');
+
+      document.getElementById('copyLinkBtn').onclick = () => navigator.clipboard.writeText(link);
+      document.getElementById('copyCodeBtn').onclick = () => navigator.clipboard.writeText(accessCode);
+    } catch (err) {
+      console.error(err);
+      saveStatus.textContent = 'Could not save: ' + (err.message || JSON.stringify(err)) +
+        '. If this mentions permissions, the CloudKit "_world" role may need Create access on SharedPost — see the setup note.';
+      saveStatus.className = 'status error';
+      saveBtn.disabled = false;
+    }
+  });
+
+  // ---------- Redeem ----------
+  const redeemBtn = document.getElementById('redeemBtn');
+  const redeemStatus = document.getElementById('redeemStatus');
+  const redeemResultCard = document.getElementById('redeemResultCard');
+  const redeemVideo = document.getElementById('redeemVideo');
+  const redeemImage = document.getElementById('redeemImage');
+  const redeemCaption = document.getElementById('redeemCaption');
+  const redeemOwner = document.getElementById('redeemOwner');
+
+  async function redeemByCode(code, postID) {
+    redeemStatus.textContent = 'Looking it up...';
+    redeemStatus.className = 'status';
+    redeemResultCard.classList.add('hidden');
+    try {
+      let query;
+      if (postID) {
+        query = { recordType: 'SharedPost', filterBy: [{ fieldName: 'postID', comparator: 'EQUALS', fieldValue: { value: postID } }] };
+      } else {
+        query = { recordType: 'SharedPost', filterBy: [{ fieldName: 'accessCode', comparator: 'EQUALS', fieldValue: { value: code.toUpperCase() } }] };
+      }
+      const response = await publicDB.performQuery(query);
+      if (!response.records || response.records.length === 0) {
+        redeemStatus.textContent = "We couldn't find a video with that code.";
+        redeemStatus.className = 'status error';
+        return;
+      }
+      const record = response.records[0];
+      if (postID && record.fields.accessCode.value.toUpperCase() !== code.toUpperCase()) {
+        redeemStatus.textContent = "That access code doesn't match this video.";
+        redeemStatus.className = 'status error';
+        return;
+      }
+      const postType = record.fields.postType ? record.fields.postType.value : 'video';
+      redeemCaption.textContent = record.fields.caption ? record.fields.caption.value : '';
+      redeemOwner.textContent = 'Shared by ' + (record.fields.ownerUsername ? record.fields.ownerUsername.value : 'Someone');
+
+      if (postType === 'video' && record.fields.videoAsset) {
+        redeemVideo.src = record.fields.videoAsset.value.downloadURL;
+        redeemVideo.classList.remove('hidden');
+        redeemImage.classList.add('hidden');
+      } else if (record.fields.thumbnailAsset) {
+        redeemImage.src = record.fields.thumbnailAsset.value.downloadURL;
+        redeemImage.classList.remove('hidden');
+        redeemVideo.classList.add('hidden');
+      }
+      redeemResultCard.classList.remove('hidden');
+      redeemStatus.textContent = '';
+    } catch (err) {
+      console.error(err);
+      redeemStatus.textContent = 'Something went wrong: ' + (err.message || JSON.stringify(err));
+      redeemStatus.className = 'status error';
+    }
+  }
+
+  redeemBtn.addEventListener('click', () => {
+    const code = document.getElementById('redeemCode').value.trim();
+    if (code) redeemByCode(code, null);
+  });
+
+  // Auto-redeem if opened via a shared link (?redeem=1&id=...)
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('redeem') === '1' && params.get('id')) {
+    document.querySelector('.tab[data-panel="redeem-panel"]').click();
+    // Still needs the code typed in manually for security — link alone isn't enough.
+  }
+
+  // ---------- Own profile: create/keep-current on sign-in ----------
+  function ensureOwnUserProfile() {
+    const predicate = { fieldName: 'ownerRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } };
+    publicDB.performQuery({ recordType: 'UserProfile', filterBy: [predicate] }).then(response => {
+      if (response.records && response.records.length > 0) {
+        const rec = response.records[0];
+        if (rec.fields.username) myUsername = rec.fields.username.value;
+        document.getElementById('signedInAs').textContent = '@' + myUsername;
+      } else {
+        publicDB.saveRecords([{
+          recordType: 'UserProfile',
+          fields: {
+            ownerRecordName: { value: currentUserRecordName },
+            username: { value: myUsername },
+            updatedAt: { value: Date.now() },
+            bio: { value: '' }
+          }
+        }]);
+      }
+    });
+  }
+
+  // ---------- My Profile: view + edit bio/photo ----------
+  function loadOwnProfile() {
+    const predicate = { fieldName: 'ownerRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } };
+    publicDB.performQuery({ recordType: 'UserProfile', filterBy: [predicate] }).then(response => {
+      const photoPreview = document.getElementById('profilePhotoPreview');
+      if (response.records && response.records.length > 0) {
+        const rec = response.records[0];
+        document.getElementById('bioInput').value = rec.fields.bio ? rec.fields.bio.value : '';
+        if (rec.fields.photoAsset) {
+          photoPreview.innerHTML = `<img src="${rec.fields.photoAsset.value.downloadURL}" style="width:100%;height:100%;object-fit:cover;">`;
+        } else {
+          photoPreview.textContent = (myUsername || '?').charAt(0).toUpperCase();
+        }
+      } else {
+        photoPreview.textContent = (myUsername || '?').charAt(0).toUpperCase();
+      }
+    });
+  }
+
+  let chosenPhotoFile = null;
+  document.getElementById('choosePhotoBtn').addEventListener('click', () => document.getElementById('profilePhotoInput').click());
+  document.getElementById('profilePhotoInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    chosenPhotoFile = file;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      document.getElementById('profilePhotoPreview').innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;">`;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById('saveProfileBtn').addEventListener('click', async () => {
+    const status = document.getElementById('profileSaveStatus');
+    status.textContent = 'Saving...';
+    status.className = 'status';
+    try {
+      const predicate = { fieldName: 'ownerRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } };
+      const response = await publicDB.performQuery({ recordType: 'UserProfile', filterBy: [predicate] });
+      const existing = response.records && response.records[0];
+      const fields = {
+        ownerRecordName: { value: currentUserRecordName },
+        username: { value: myUsername },
+        updatedAt: { value: Date.now() },
+        bio: { value: document.getElementById('bioInput').value }
+      };
+      const record = existing
+        ? { recordName: existing.recordName, recordType: 'UserProfile', recordChangeTag: existing.recordChangeTag, fields }
+        : { recordType: 'UserProfile', fields };
+
+      if (chosenPhotoFile) {
+        const uploadResponse = await container.publicCloudDatabase.client.request({
+          method: 'POST',
+          path: `${container.containerPath}/assets/upload`,
+          data: { tokens: [{ recordType: 'UserProfile', fieldName: 'photoAsset' }] }
+        });
+        const uploadInfo = uploadResponse.data.tokens[0];
+        const uploadResult = await fetch(uploadInfo.url, { method: 'POST', body: chosenPhotoFile }).then(r => r.json());
+        const uploaded = uploadResult.singleFile;
+        record.fields.photoAsset = { value: { downloadURL: uploaded.downloadURL, receipt: uploaded.receipt, size: uploaded.size } };
+      }
+
+      await publicDB.saveRecords([record]);
+      status.textContent = 'Profile saved!';
+      status.className = 'status success';
+      chosenPhotoFile = null;
+    } catch (err) {
+      console.error(err);
+      status.textContent = 'Could not save: ' + (err.message || JSON.stringify(err));
+      status.className = 'status error';
+    }
+  });
+
+  // ---------- My public posts ----------
+  function loadMyPublicPosts() {
+    fetchPublicPostsFor(currentUserRecordName, (posts) => {
+      renderPostGrid(document.getElementById('myPublicPosts'), posts);
+    });
+  }
+
+  function fetchPublicPostsFor(ownerRecordName, callback) {
+    const predicates = [
+      { fieldName: 'ownerRecordName', comparator: 'EQUALS', fieldValue: { value: ownerRecordName } },
+      { fieldName: 'isPublic', comparator: 'EQUALS', fieldValue: { value: 1 } }
+    ];
+    publicDB.performQuery({ recordType: 'SharedPost', filterBy: predicates }).then(response => {
+      callback(response.records || []);
+    }).catch(err => {
+      console.error(err);
+      callback([]);
+    });
+  }
+
+  function renderPostGrid(container, posts) {
+    if (posts.length === 0) {
+      container.innerHTML = '<span class="status">No public posts yet.</span>';
+      return;
+    }
+    container.innerHTML = '';
+    container.style.display = 'grid';
+    container.style.gridTemplateColumns = '1fr 1fr';
+    container.style.gap = '10px';
+    posts.forEach(rec => {
+      const tile = document.createElement('div');
+      tile.style.cssText = 'background:#111;border-radius:12px;height:110px;position:relative;overflow:hidden;cursor:pointer;';
+      const thumbURL = rec.fields.thumbnailAsset ? rec.fields.thumbnailAsset.value.downloadURL : null;
+      if (thumbURL) {
+        tile.style.backgroundImage = `url(${thumbURL})`;
+        tile.style.backgroundSize = 'cover';
+        tile.style.backgroundPosition = 'center';
+      }
+      const caption = document.createElement('div');
+      caption.textContent = rec.fields.caption ? rec.fields.caption.value : '';
+      caption.style.cssText = 'font-size:11px;color:white;position:absolute;bottom:4px;left:6px;right:6px;text-shadow:0 1px 3px black;';
+      tile.appendChild(caption);
+      tile.addEventListener('click', () => viewPostDirectly(rec));
+      container.appendChild(tile);
+    });
+  }
+
+  // Used when tapping a post from a profile grid — we already know it's
+  // public (that's how it got into this grid), so no access code needed,
+  // unlike the "Have a code?" flow which is for posts you don't already
+  // have visibility into.
+  function viewPostDirectly(record) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('redeem-panel').classList.add('active');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    const postType = record.fields.postType ? record.fields.postType.value : 'video';
+    document.getElementById('redeemCaption').textContent = record.fields.caption ? record.fields.caption.value : '';
+    document.getElementById('redeemOwner').textContent = 'Shared by ' + (record.fields.ownerUsername ? record.fields.ownerUsername.value : 'Someone');
+    const redeemVideo = document.getElementById('redeemVideo');
+    const redeemImage = document.getElementById('redeemImage');
+    if (postType === 'video' && record.fields.videoAsset) {
+      redeemVideo.src = record.fields.videoAsset.value.downloadURL;
+      redeemVideo.classList.remove('hidden');
+      redeemImage.classList.add('hidden');
+    } else if (record.fields.thumbnailAsset) {
+      redeemImage.src = record.fields.thumbnailAsset.value.downloadURL;
+      redeemImage.classList.remove('hidden');
+      redeemVideo.classList.add('hidden');
+    }
+    document.getElementById('redeemResultCard').classList.remove('hidden');
+  }
+
+  // ---------- My Posts (management: all own posts, public + private) ----------
+  let myAllPosts = [];
+  let editingRecord = null;
+
+  document.querySelector('.tab[data-panel="myposts-panel"]').addEventListener('click', loadMyPosts);
+
+  function loadMyPosts() {
+    const listEl = document.getElementById('myPostsList');
+    listEl.innerHTML = '<div class="card"><span class="status">Loading...</span></div>';
+    const predicate = { fieldName: 'ownerRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } };
+    publicDB.performQuery({ recordType: 'SharedPost', filterBy: [predicate] }).then(response => {
+      myAllPosts = (response.records || []).sort((a, b) => (b.fields.createdAt ? b.fields.createdAt.value : 0) - (a.fields.createdAt ? a.fields.createdAt.value : 0));
+      populateTagFilter();
+      renderMyPostsList();
+    }).catch(err => {
+      listEl.innerHTML = `<div class="card"><span class="status error">Could not load posts: ${err.message || err}</span></div>`;
+    });
+  }
+
+  function populateTagFilter() {
+    const select = document.getElementById('tagFilter');
+    const currentValue = select.value;
+    const tags = new Set();
+    myAllPosts.forEach(r => tags.add(r.fields.tag ? r.fields.tag.value : 'Untagged'));
+    select.innerHTML = '<option value="">All tags</option>';
+    Array.from(tags).sort().forEach(tag => {
+      const opt = document.createElement('option');
+      opt.value = tag;
+      opt.textContent = tag;
+      select.appendChild(opt);
+    });
+    select.value = currentValue;
+  }
+
+  document.getElementById('tagFilter').addEventListener('change', renderMyPostsList);
+
+  function renderMyPostsList() {
+    const listEl = document.getElementById('myPostsList');
+    const filterTag = document.getElementById('tagFilter').value;
+    const filtered = filterTag ? myAllPosts.filter(r => (r.fields.tag ? r.fields.tag.value : 'Untagged') === filterTag) : myAllPosts;
+    if (filtered.length === 0) {
+      listEl.innerHTML = '<div class="card"><span class="status">No posts yet. Record one to get started!</span></div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    filtered.forEach(rec => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.cssText = 'display:flex;gap:12px;align-items:center;cursor:pointer;';
+      const thumbURL = rec.fields.thumbnailAsset ? rec.fields.thumbnailAsset.value.downloadURL : null;
+      const thumb = document.createElement('div');
+      thumb.style.cssText = `width:64px;height:64px;border-radius:10px;background:#111 ${thumbURL ? `url(${thumbURL})` : ''};background-size:cover;background-position:center;flex-shrink:0;`;
+      const info = document.createElement('div');
+      info.style.cssText = 'flex:1;min-width:0;';
+      const isPublic = rec.fields.isPublic && rec.fields.isPublic.value === 1;
+      const tag = rec.fields.tag ? rec.fields.tag.value : 'Untagged';
+      info.innerHTML = `
+        <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${rec.fields.caption ? rec.fields.caption.value : 'Untitled'}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${tag} · ${isPublic ? 'Public' : 'Private'}</div>
+      `;
+      card.appendChild(thumb);
+      card.appendChild(info);
+      card.addEventListener('click', () => openEditPost(rec));
+      listEl.appendChild(card);
+    });
+  }
+
+  function openEditPost(rec) {
+    editingRecord = rec;
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('editpost-panel').classList.add('active');
+
+    const mediaWrap = document.getElementById('editPostMediaWrap');
+    mediaWrap.innerHTML = '';
+    const postType = rec.fields.postType ? rec.fields.postType.value : 'video';
+    if (postType === 'video' && rec.fields.videoAsset) {
+      const v = document.createElement('video');
+      v.src = rec.fields.videoAsset.value.downloadURL;
+      v.controls = true;
+      v.playsInline = true;
+      mediaWrap.appendChild(v);
+    } else if (rec.fields.thumbnailAsset) {
+      const img = document.createElement('img');
+      img.src = rec.fields.thumbnailAsset.value.downloadURL;
+      img.style.cssText = 'width:100%;border-radius:14px;';
+      mediaWrap.appendChild(img);
+    }
+
+    document.getElementById('editCaption').value = rec.fields.caption ? rec.fields.caption.value : '';
+    document.getElementById('editTag').value = rec.fields.tag ? rec.fields.tag.value : '';
+    document.getElementById('editPublicToggle').checked = !!(rec.fields.isPublic && rec.fields.isPublic.value === 1);
+    document.getElementById('editStatus').textContent = '';
+  }
+
+  document.getElementById('backFromEditBtn').addEventListener('click', () => {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('myposts-panel').classList.add('active');
+    loadMyPosts();
+  });
+
+  document.getElementById('saveEditBtn').addEventListener('click', () => {
+    if (!editingRecord) return;
+    const status = document.getElementById('editStatus');
+    status.textContent = 'Saving...';
+    status.className = 'status';
+    const newTag = document.getElementById('editTag').value.trim() || 'Untagged';
+    publicDB.saveRecords([{
+      recordName: editingRecord.recordName,
+      recordType: 'SharedPost',
+      recordChangeTag: editingRecord.recordChangeTag,
+      fields: {
+        caption: { value: document.getElementById('editCaption').value },
+        tag: { value: newTag },
+        isPublic: { value: document.getElementById('editPublicToggle').checked ? 1 : 0 }
+      }
+    }]).then(() => {
+      status.textContent = 'Saved!';
+      status.className = 'status success';
+    }).catch(err => {
+      status.textContent = 'Could not save: ' + (err.message || err);
+      status.className = 'status error';
+    });
+  });
+
+  document.getElementById('deletePostBtn').addEventListener('click', () => {
+    if (!editingRecord) return;
+    if (!confirm('Delete this post? This removes it from CloudKit — anyone with its link/code will no longer be able to view it.')) return;
+    const status = document.getElementById('editStatus');
+    status.textContent = 'Deleting...';
+    status.className = 'status';
+    publicDB.saveRecords([], [{ recordName: editingRecord.recordName }]).then(() => {
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      document.getElementById('myposts-panel').classList.add('active');
+      loadMyPosts();
+    }).catch(err => {
+      status.textContent = 'Could not delete: ' + (err.message || err);
+      status.className = 'status error';
+    });
+  });
+
+  // ---------- Discover / search ----------
+  document.getElementById('discoverSearchBtn').addEventListener('click', () => {
+    const query = document.getElementById('discoverSearch').value.trim();
+    const resultsEl = document.getElementById('discoverResults');
+    const statusEl = document.getElementById('discoverStatus');
+    if (!query) { resultsEl.innerHTML = ''; return; }
+    statusEl.textContent = 'Searching...';
+    statusEl.className = 'status';
+    const predicate = { fieldName: 'username', comparator: 'BEGINSWITH', fieldValue: { value: query } };
+    publicDB.performQuery({ recordType: 'UserProfile', filterBy: [predicate] }).then(response => {
+      statusEl.textContent = '';
+      const records = (response.records || []).filter(r => r.fields.ownerRecordName.value !== currentUserRecordName);
+      if (records.length === 0) {
+        resultsEl.innerHTML = '<span class="status">No one found with that username.</span>';
+        return;
+      }
+      resultsEl.innerHTML = '';
+      records.forEach(rec => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:10px;background:#FAFAFE;border-radius:10px;margin-bottom:8px;cursor:pointer;';
+        row.innerHTML = `<span style="font-weight:600;">@${rec.fields.username.value}</span><span style="color:var(--blue);font-size:13px;">View profile</span>`;
+        row.addEventListener('click', () => openProfile(rec.fields.ownerRecordName.value, rec.fields.username.value));
+        resultsEl.appendChild(row);
+      });
+    }).catch(err => {
+      statusEl.textContent = 'Search failed: ' + (err.message || JSON.stringify(err));
+      statusEl.className = 'status error';
+    });
+  });
+
+  // ---------- Friends list ----------
+  function loadFriendsList() {
+    const listEl = document.getElementById('friendsList');
+    listEl.innerHTML = '<span class="status">Loading...</span>';
+    Promise.all([
+      publicDB.performQuery({ recordType: 'FriendRequest', filterBy: [
+        { fieldName: 'fromRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } },
+        { fieldName: 'status', comparator: 'EQUALS', fieldValue: { value: 'accepted' } }
+      ]}),
+      publicDB.performQuery({ recordType: 'FriendRequest', filterBy: [
+        { fieldName: 'toOwnerRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } },
+        { fieldName: 'status', comparator: 'EQUALS', fieldValue: { value: 'accepted' } }
+      ]})
+    ]).then(([sentResp, receivedResp]) => {
+      const seen = new Set();
+      const friends = [];
+      (sentResp.records || []).forEach(r => {
+        const name = r.fields.toOwnerRecordName.value;
+        if (!seen.has(name)) { seen.add(name); friends.push({ recordName: name, username: r.fields.toOwnerUsername ? r.fields.toOwnerUsername.value : 'Friend' }); }
+      });
+      (receivedResp.records || []).forEach(r => {
+        const name = r.fields.fromRecordName.value;
+        if (!seen.has(name)) { seen.add(name); friends.push({ recordName: name, username: r.fields.fromUsername ? r.fields.fromUsername.value : 'Friend' }); }
+      });
+      if (friends.length === 0) {
+        listEl.innerHTML = '<span class="status">No friends yet. Search above, or share a video so someone can connect with you.</span>';
+        return;
+      }
+      listEl.innerHTML = '';
+      friends.forEach(f => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:10px;background:#FAFAFE;border-radius:10px;margin-bottom:8px;';
+        row.innerHTML = `<span style="font-weight:600;cursor:pointer;">@${f.username}</span>`;
+        row.querySelector('span').addEventListener('click', () => openProfile(f.recordName, f.username));
+        const removeBtn = document.createElement('span');
+        removeBtn.textContent = '✕ remove';
+        removeBtn.style.cssText = 'color:var(--danger);font-size:12px;cursor:pointer;';
+        removeBtn.addEventListener('click', () => {
+          if (confirm(`Remove @${f.username} from your friends?`)) removeFriend(f.recordName, loadFriendsList);
+        });
+        row.appendChild(removeBtn);
+        listEl.appendChild(row);
+      });
+    }).catch(err => {
+      listEl.innerHTML = `<span class="status error">Could not load friends: ${err.message || err}</span>`;
+    });
+  }
+
+  function removeFriend(theirRecordName, onDone) {
+    Promise.all([
+      publicDB.performQuery({ recordType: 'FriendRequest', filterBy: [
+        { fieldName: 'fromRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } },
+        { fieldName: 'toOwnerRecordName', comparator: 'EQUALS', fieldValue: { value: theirRecordName } }
+      ]}),
+      publicDB.performQuery({ recordType: 'FriendRequest', filterBy: [
+        { fieldName: 'fromRecordName', comparator: 'EQUALS', fieldValue: { value: theirRecordName } },
+        { fieldName: 'toOwnerRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } }
+      ]})
+    ]).then(([a, b]) => {
+      const seen = new Set();
+      const toDelete = [];
+      [...(a.records || []), ...(b.records || [])].forEach(r => {
+        if (!seen.has(r.recordName)) { seen.add(r.recordName); toDelete.push({ recordName: r.recordName }); }
+      });
+      if (toDelete.length === 0) { onDone(); return; }
+      publicDB.saveRecords([], toDelete).then(onDone).catch(onDone);
+    });
+  }
+
+  // ---------- Incoming requests ----------
+  function loadIncomingRequests() {
+    const el = document.getElementById('incomingRequests');
+    const predicate = { fieldName: 'toOwnerRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } };
+    const statusPredicate = { fieldName: 'status', comparator: 'EQUALS', fieldValue: { value: 'pending' } };
+    publicDB.performQuery({ recordType: 'FriendRequest', filterBy: [predicate, statusPredicate] }).then(response => {
+      const records = response.records || [];
+      if (records.length === 0) {
+        el.innerHTML = '<span class="status">No pending requests.</span>';
+        return;
+      }
+      el.innerHTML = '';
+      records.forEach(rec => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:10px;background:#FAFAFE;border-radius:10px;margin-bottom:8px;';
+        const name = rec.fields.fromUsername ? rec.fields.fromUsername.value : 'Someone';
+        row.innerHTML = `<span style="font-weight:600;">@${name}</span>`;
+        const acceptBtn = document.createElement('button');
+        acceptBtn.textContent = 'Accept';
+        acceptBtn.className = 'btn-primary';
+        acceptBtn.style.cssText = 'width:auto;padding:6px 14px;font-size:13px;';
+        acceptBtn.addEventListener('click', () => {
+          publicDB.saveRecords([{
+            recordName: rec.recordName,
+            recordType: 'FriendRequest',
+            recordChangeTag: rec.recordChangeTag,
+            fields: { status: { value: 'accepted' } }
+          }]).then(() => { loadIncomingRequests(); loadFriendsList(); });
+        });
+        row.appendChild(acceptBtn);
+        el.appendChild(row);
+      });
+    }).catch(err => {
+      el.innerHTML = `<span class="status error">Could not load requests: ${err.message || err}</span>`;
+    });
+  }
+
+  // ---------- Viewing someone's profile ----------
+  let viewingRecordName = null;
+  function openProfile(ownerRecordName, username) {
+    viewingRecordName = ownerRecordName;
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('viewprofile-panel').classList.add('active');
+    document.getElementById('viewProfileUsername').textContent = '@' + username;
+    document.getElementById('viewProfilePhoto').textContent = username.charAt(0).toUpperCase();
+    document.getElementById('viewProfileBio').textContent = '';
+    document.getElementById('viewProfilePosts').innerHTML = '<span class="status">Loading...</span>';
+
+    const predicate = { fieldName: 'ownerRecordName', comparator: 'EQUALS', fieldValue: { value: ownerRecordName } };
+    publicDB.performQuery({ recordType: 'UserProfile', filterBy: [predicate] }).then(response => {
+      if (response.records && response.records.length > 0) {
+        const rec = response.records[0];
+        document.getElementById('viewProfileBio').textContent = rec.fields.bio ? rec.fields.bio.value : '';
+        if (rec.fields.photoAsset) {
+          document.getElementById('viewProfilePhoto').innerHTML = `<img src="${rec.fields.photoAsset.value.downloadURL}" style="width:100%;height:100%;object-fit:cover;">`;
+        }
+      }
+    });
+
+    fetchPublicPostsFor(ownerRecordName, (posts) => {
+      renderPostGrid(document.getElementById('viewProfilePosts'), posts);
+    });
+
+    renderFriendAction(ownerRecordName, username);
+  }
+
+  function renderFriendAction(ownerRecordName, username) {
+    const el = document.getElementById('viewProfileFriendAction');
+    if (!ensureSignedIn()) {
+      el.innerHTML = '<span class="status">Sign in with Apple to connect as a friend.</span>';
+      return;
+    }
+    el.innerHTML = '<span class="status">Checking...</span>';
+    Promise.all([
+      publicDB.performQuery({ recordType: 'FriendRequest', filterBy: [
+        { fieldName: 'fromRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } },
+        { fieldName: 'toOwnerRecordName', comparator: 'EQUALS', fieldValue: { value: ownerRecordName } }
+      ]}),
+      publicDB.performQuery({ recordType: 'FriendRequest', filterBy: [
+        { fieldName: 'fromRecordName', comparator: 'EQUALS', fieldValue: { value: ownerRecordName } },
+        { fieldName: 'toOwnerRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } }
+      ]})
+    ]).then(([a, b]) => {
+      const all = [...(a.records || []), ...(b.records || [])];
+      const isFriends = all.some(r => r.fields.status && r.fields.status.value === 'accepted');
+      const isPending = all.some(r => r.fields.status && r.fields.status.value === 'pending');
+      if (isFriends) {
+        el.innerHTML = '<span style="color:#1E8E5A;font-weight:600;">✓ You are friends</span>';
+      } else if (isPending) {
+        el.innerHTML = '<span class="status">Request pending</span>';
+      } else {
+        const btn = document.createElement('button');
+        btn.className = 'btn-lavender';
+        btn.textContent = 'Connect as friend';
+        btn.style.width = 'auto';
+        btn.style.padding = '10px 20px';
+        btn.addEventListener('click', () => {
+          if (ownerRecordName === currentUserRecordName) {
+            el.innerHTML = '<span class="status error">You can\'t send a friend request to yourself.</span>';
+            return;
+          }
+          publicDB.saveRecords([{
+            recordType: 'FriendRequest',
+            fields: {
+              toOwnerRecordName: { value: ownerRecordName },
+              toOwnerUsername: { value: username },
+              fromRecordName: { value: currentUserRecordName },
+              fromUsername: { value: myUsername },
+              postID: { value: '' },
+              status: { value: 'pending' },
+              createdAt: { value: Date.now() }
+            }
+          }]).then(() => {
+            el.innerHTML = '<span style="color:#1E8E5A;">Friend request sent! 🎉</span>';
+          }).catch(err => {
+            el.innerHTML = `<span class="status error">${err.message || err}</span>`;
+          });
+        });
+        el.innerHTML = '';
+        el.appendChild(btn);
+      }
+    });
+  }
+
+  document.getElementById('backFromProfileBtn').addEventListener('click', () => {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('friends-panel').classList.add('active');
+  });
+
+  // ---------- PWA install support ----------
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => {
+        console.log('Service worker registration failed (site still works normally):', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
