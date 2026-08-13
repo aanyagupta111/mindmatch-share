@@ -193,15 +193,19 @@
 <div class="panel active" id="signin-gate" style="max-width:480px;margin:0 auto;padding:0 20px;">
   <div class="card" style="text-align:center;">
     <p style="font-size:14px;color:var(--muted);margin-top:0;">
-      Sign in with the same Apple ID you use for iCloud — this is the same account system as the iOS app, so your videos, friends, and profile stay in sync either way.
+      Sign in with the same Apple ID you use for iCloud to sync your friends and profile with the iOS app. You can also skip this and still record, save, and share videos — Friends and My Profile just won't be available without signing in.
     </p>
     <div id="appleSignInButton" style="display:flex;justify-content:center;margin:14px 0;"></div>
+    <button class="btn-secondary" id="skipSignInBtn" style="width:100%;">Continue without signing in</button>
     <div class="status" id="signInStatus"></div>
   </div>
 </div>
 
 <div id="signedInBar" class="hidden" style="max-width:480px;margin:0 auto;padding:0 20px 6px;text-align:right;">
   <span style="font-size:12px;color:var(--muted);">Signed in <span id="signedInAs"></span> · <a href="#" id="signOutLink" style="color:var(--blue);">Sign out</a></span>
+</div>
+<div id="guestBar" class="hidden" style="max-width:480px;margin:0 auto;padding:0 20px 6px;text-align:right;">
+  <span style="font-size:12px;color:var(--muted);">Not signed in · <a href="#" id="signInFromGuestLink" style="color:var(--blue);">Sign in with Apple</a></span>
 </div>
 
 <div class="tabs hidden" id="mainTabs">
@@ -437,8 +441,30 @@
   // CKContainer.fetchUserRecordID for that same Apple ID, so friends and
   // profiles set up here are genuinely the same person as on iOS, not a
   // separate web-only account.
-  let currentUserRecordName = null;
+  let currentUserRecordName = null; // set only when actually signed in with Apple
   let myUsername = null;
+
+  // A lightweight fallback identity for guest (not-signed-in) use — lets
+  // someone record/save/share and manage their own posts without an
+  // Apple ID. Friends and My Profile still require real sign-in, since
+  // those need a genuine, stable identity to mean anything to other
+  // people, not just a random ID sitting in this one browser.
+  function getGuestIdentity() {
+    let id = localStorage.getItem('mindmatch_guest_identity');
+    if (!id) {
+      id = 'guest_' + crypto.randomUUID();
+      localStorage.setItem('mindmatch_guest_identity', id);
+    }
+    return id;
+  }
+
+  // The identity actually used for saving/querying "my own" posts —
+  // the real signed-in identity if there is one, otherwise the guest
+  // fallback. Friends/Profile-gating uses ensureSignedIn() instead,
+  // which only ever considers the real identity.
+  function activeOwnerRecordName() {
+    return currentUserRecordName || getGuestIdentity();
+  }
 
   function ensureSignedIn() {
     return currentUserRecordName !== null;
@@ -473,6 +499,7 @@
   function handleSignedIn(userInfo) {
     currentUserRecordName = userInfo.userRecordName;
     document.getElementById('signin-gate').classList.add('hidden');
+    document.getElementById('guestBar').classList.add('hidden');
     document.getElementById('signedInBar').classList.remove('hidden');
     document.getElementById('mainTabs').classList.remove('hidden');
     document.getElementById('record-panel').classList.add('active');
@@ -489,6 +516,26 @@
     loadMyPublicPosts();
     loadOwnProfile();
   }
+
+  // Guest mode: skip sign-in entirely. Record/Redeem/My Introductions
+  // work using the local guest identity; Friends and My Profile show a
+  // "sign in to use this" notice instead of their real content.
+  function enterGuestMode() {
+    myUsername = 'guest';
+    document.getElementById('signin-gate').classList.add('hidden');
+    document.getElementById('guestBar').classList.remove('hidden');
+    document.getElementById('mainTabs').classList.remove('hidden');
+    document.getElementById('record-panel').classList.add('active');
+  }
+
+  document.getElementById('skipSignInBtn').addEventListener('click', enterGuestMode);
+  document.getElementById('signInFromGuestLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('guestBar').classList.add('hidden');
+    document.getElementById('mainTabs').classList.add('hidden');
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('signin-gate').classList.remove('hidden').classList.add('active');
+  });
 
   document.getElementById('signOutLink').addEventListener('click', (e) => {
     e.preventDefault();
@@ -605,18 +652,13 @@
 
   saveBtn.addEventListener('click', async () => {
     if (!recordedBlob) return;
-    if (!ensureSignedIn()) {
-      saveStatus.textContent = 'Please sign in with Apple first.';
-      saveStatus.className = 'status error';
-      return;
-    }
     saveBtn.disabled = true;
     saveStatus.textContent = 'Uploading...';
     saveStatus.className = 'status';
     try {
       const postID = crypto.randomUUID();
       const accessCode = generateAccessCode();
-      const ownerRecordName = currentUserRecordName;
+      const ownerRecordName = activeOwnerRecordName();
       const caption = document.getElementById('captionInput').value || '';
       const tag = document.getElementById('tagInput').value.trim() || 'Untagged';
       const isPublic = document.getElementById('publicToggle').checked ? 1 : 0;
@@ -922,7 +964,7 @@
   function loadMyPosts() {
     const listEl = document.getElementById('myPostsList');
     listEl.innerHTML = '<div class="card"><span class="status">Loading...</span></div>';
-    const predicate = { fieldName: 'ownerRecordName', comparator: 'EQUALS', fieldValue: { value: currentUserRecordName } };
+    const predicate = { fieldName: 'ownerRecordName', comparator: 'EQUALS', fieldValue: { value: activeOwnerRecordName() } };
     publicDB.performQuery({ recordType: 'SharedPost', filterBy: [predicate] }).then(response => {
       myAllPosts = (response.records || []).sort((a, b) => (b.fields.createdAt ? b.fields.createdAt.value : 0) - (a.fields.createdAt ? a.fields.createdAt.value : 0));
       populateTagFilter();

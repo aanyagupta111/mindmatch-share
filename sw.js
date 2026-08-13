@@ -3,7 +3,13 @@
 // launched with no connection. It does NOT cache anything from CloudKit
 // (videos, saved posts) — those always need a live connection, same as
 // the native app does.
-const CACHE_NAME = "mindmatch-web-shell-v1";
+// IMPORTANT: bump this version number every time record.html (or any
+// shell file) changes. Browsers only re-check/re-cache when this exact
+// string changes — otherwise a service worker keeps serving whatever it
+// cached on its very first install, ignoring all future updates on the
+// server. This was v1 since the first deploy; bumping to v2 here is
+// what actually pushes out every fix made since then.
+const CACHE_NAME = "mindmatch-web-shell-v3";
 const SHELL_FILES = [
   "./record.html",
   "./manifest.json",
