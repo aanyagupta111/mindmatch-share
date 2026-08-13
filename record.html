@@ -675,29 +675,14 @@
           createdAt: { value: Date.now() },
           postType: { value: 'video' },
           isPublic: { value: isPublic },
-          tag: { value: tag }
-        }
-      };
-
-      // Video asset upload requires a two-step process in CloudKit JS:
-      // request an upload URL, PUT the file there, then reference it.
-      const uploadResponse = await container.publicCloudDatabase.client.request({
-        method: 'POST',
-        path: `${container.containerPath}/assets/upload`,
-        data: { tokens: [{ recordType: 'SharedPost', fieldName: 'videoAsset' }] }
-      });
-      const uploadInfo = uploadResponse.data.tokens[0];
-      const uploadResult = await fetch(uploadInfo.url, {
-        method: 'POST',
-        body: recordedBlob
-      }).then(r => r.json());
-      const uploadedAsset = uploadResult.singleFile;
-
-      record.fields.videoAsset = {
-        value: {
-          downloadURL: uploadedAsset.downloadURL,
-          receipt: uploadedAsset.receipt,
-          size: uploadedAsset.size
+          tag: { value: tag },
+          // CloudKit JS handles asset uploads internally when the field
+          // value is a raw Blob/File — no manual multi-step upload
+          // needed. (An earlier version of this tried to manually call
+          // a client.request()/assets-upload endpoint that doesn't
+          // actually exist on the public API surface, which is why
+          // saving failed before.)
+          videoAsset: { value: recordedBlob }
         }
       };
 
@@ -861,15 +846,7 @@
         : { recordType: 'UserProfile', fields };
 
       if (chosenPhotoFile) {
-        const uploadResponse = await container.publicCloudDatabase.client.request({
-          method: 'POST',
-          path: `${container.containerPath}/assets/upload`,
-          data: { tokens: [{ recordType: 'UserProfile', fieldName: 'photoAsset' }] }
-        });
-        const uploadInfo = uploadResponse.data.tokens[0];
-        const uploadResult = await fetch(uploadInfo.url, { method: 'POST', body: chosenPhotoFile }).then(r => r.json());
-        const uploaded = uploadResult.singleFile;
-        record.fields.photoAsset = { value: { downloadURL: uploaded.downloadURL, receipt: uploaded.receipt, size: uploaded.size } };
+        fields.photoAsset = { value: chosenPhotoFile };
       }
 
       await publicDB.saveRecords([record]);

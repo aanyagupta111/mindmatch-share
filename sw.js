@@ -9,7 +9,7 @@
 // cached on its very first install, ignoring all future updates on the
 // server. This was v1 since the first deploy; bumping to v2 here is
 // what actually pushes out every fix made since then.
-const CACHE_NAME = "mindmatch-web-shell-v3";
+const CACHE_NAME = "mindmatch-web-shell-v4";
 const SHELL_FILES = [
   "./record.html",
   "./manifest.json",
